@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "../../../../../ArduinoVSCode"
+		},
+		{
+			"name": "SofticeController",
+			"path": ".."
+		}
+	],
+	"settings": {}
+}
