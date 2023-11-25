@@ -4,11 +4,13 @@
 
 #define PIN_RELAY1 2
 #define PIN_RELAY2 3
+#define PIN_MOTOR_BUTTON 7
 
 Scheduler runner;
 
 void t1Callback();
 void sampleADCCallback();
+void sampleMotorButtonCallback();
 
 #define SUPPLY_VOLTAGE 5.0
 #define ADC_CENTER SUPPLY_VOLTAGE / 2.0
@@ -26,6 +28,7 @@ bool toggle = true;
 
 Task t1(100, TASK_FOREVER, &t1Callback);
 Task sampleADCTask(1, TASK_FOREVER, &sampleADCCallback);
+Task sampleMotorButton(100, TASK_FOREVER, &sampleMotorButtonCallback);
 
 Rms MeasAvg; // Create an instance of Average.
 
@@ -47,20 +50,28 @@ void setup()
 
   runner.addTask(t1);
   runner.addTask(sampleADCTask);
+  runner.addTask(sampleMotorButton);
   Serial.println("added t1");
 
   delay(1000);
 
   t1.enable();
   sampleADCTask.enable();
+  sampleMotorButton.enable();
   Serial.println("Enabled t1");
 }
 
 void sampleADCCallback()
 {
-  static char buffer[100];
   int sample = analogRead(A0);
   MeasAvg.update(sample);
+}
+
+
+void sampleMotorButtonCallback(){
+  int sample_motor_button = digitalRead(PIN_MOTOR_BUTTON);
+  Serial.print(">MotorButton:");
+  Serial.println(sample_motor_button);
 }
 
 void t1Callback()
