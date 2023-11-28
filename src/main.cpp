@@ -44,19 +44,18 @@ bool toggle = true;
 #define ST_BUTTON_PRESSED 6
 
 
-#define LED_BLINK_1HZ 100
-#define LED_BLINK_10HZ 10
+#define LED_BLINK_10HZ 1
+#define LED_BLINK_1HZ 10
 #define LED_BLINK_5HZ 5
-#define LED_BLINK_100HZ 1
 #define LED_ON -2
 #define LED_BLINK_OFF -1
 
 int current_state = ST_INIT;
 int next_state = current_state;
 
-bool flag_button_pressed = true;
+bool flag_button_pressed = false;
 
-int motor_led_blink_delay = 0;
+int motor_led_blink_delay = LED_BLINK_1HZ;
 
 Task t1(100, TASK_FOREVER, &t1Callback);
 Task sampleADCTask(1, TASK_FOREVER, &sampleADCCallback);
@@ -68,9 +67,9 @@ Rms MeasAvg; // Create an instance of Average.
 
 void motor_enabled(bool motor_on){
   if(motor_on){
-    digitalWrite(PIN_RELAY1, HIGH);
-  } else {
     digitalWrite(PIN_RELAY1, LOW);
+  } else {
+    digitalWrite(PIN_RELAY1, HIGH);
   }
 }
 
@@ -85,6 +84,9 @@ void setup()
   pinMode(PIN_RELAY1, OUTPUT);
   pinMode(PIN_RELAY2, OUTPUT);
   pinMode(PIN_MOTOR_LED, OUTPUT);
+
+  digitalWrite(PIN_RELAY1, HIGH);
+  digitalWrite(PIN_RELAY2, HIGH);
 
   Serial.begin(9600);
   Serial.println("Scheduler TEST");
@@ -118,13 +120,6 @@ void sampleADCCallback()
 bool button_motor_pressed = false;
 int cnt_button_motor = 0;
 
-bool get_button_state(){
-  bool tmp = button_motor_pressed;
-  button_motor_pressed = false;
-  return tmp;
-}
-
-
 void motor_led_state(int blink_delay){
   motor_led_blink_delay = blink_delay;
 }
@@ -153,7 +148,7 @@ void stateMachineCallback()
 
     case ST_MOTOR_OFF:
       motor_enabled(false);
-      motor_led_state(LED_BLINK_5HZ);
+      motor_led_state(LED_BLINK_1HZ);
       next_state = ST_IDLE;
       break;
 
@@ -219,7 +214,7 @@ void motorBlinkCallback(){
   static int sleep_cnt = 0;
   Serial.print("sleep blink counter:");
   Serial.println(sleep_cnt);
-  if(sleep_cnt++ > motor_led_blink_delay){
+  if(sleep_cnt++ >= motor_led_blink_delay){
     digitalWrite(PIN_MOTOR_LED, !digitalRead(PIN_MOTOR_LED));
     sleep_cnt = 0;
   }
