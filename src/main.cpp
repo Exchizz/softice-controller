@@ -3,6 +3,7 @@
 #include <TrueRMS.h>
 #include <ButtonStateMachine.h>
 #include <LEDStateMachine.h>
+#include <MotorStateMachine.h>
 
 #define PIN_RELAY1 2
 #define PIN_RELAY2 3
@@ -38,12 +39,9 @@ bool toggle = true;
 
 #define ST_INIT 0
 #define ST_IDLE 1
-#define ST_MOTOR_ON 2
-#define ST_MOTOR_OFF 3
-#define ST_MOTOR_RUNNING 4
 
-//#define ST_BUTTON_WAIT_RELEASE 5
-//#define ST_BUTTON_PRESSED 6
+// #define ST_BUTTON_WAIT_RELEASE 5
+// #define ST_BUTTON_PRESSED 6
 
 int current_state = ST_INIT;
 int next_state = current_state;
@@ -58,23 +56,14 @@ Task motorBlinkTask(100, TASK_FOREVER, &motorBlinkCallback);
 
 Rms MeasAvg; // Create an instance of Average.
 
-void motor_enabled(bool motor_on)
-{
-  if (motor_on)
-  {
-    digitalWrite(PIN_RELAY1, LOW);
-  }
-  else
-  {
-    digitalWrite(PIN_RELAY1, HIGH);
-  }
-}
+ButtonStateMachine *motorBtnSTM;
+ButtonStateMachine *compressorBtnSTM;
 
-ButtonStateMachine * motorBtnSTM;
-ButtonStateMachine * compressorBtnSTM;
+LEDStateMachine *motorLEDSTM;
+LEDStateMachine *compressorLEDSTM;
 
-LEDStateMachine * motorLEDSTM;
-LEDStateMachine * compressorLEDSTM;
+MotorStateMachine *motorSTM;
+MotorStateMachine *compressorSTM;
 
 void setup()
 {
@@ -109,13 +98,21 @@ void setup()
 
   delay(1000);
 
-
   motorBtnSTM = new ButtonStateMachine(PIN_MOTOR_BUTTON);
   compressorBtnSTM = new ButtonStateMachine(PIN_COMPRESSOR_BUTTON);
 
   motorLEDSTM = new LEDStateMachine(PIN_MOTOR_LED);
-  compressorLEDSTM = new LEDStateMachine(PIN_COMPRESSOR_LED); 
+  compressorLEDSTM = new LEDStateMachine(PIN_COMPRESSOR_LED);
 
+  motorSTM = new MotorStateMachine(PIN_RELAY1);
+  motorSTM->setLEDStateMachine(motorLEDSTM);
+  motorSTM->setButtonStateMachine(motorBtnSTM);
+
+  compressorSTM = new MotorStateMachine(PIN_RELAY2);
+  compressorSTM->setLEDStateMachine(compressorLEDSTM);
+  compressorSTM->setButtonStateMachine(compressorBtnSTM);
+
+  //  motorSTM = new MotorStateMachine(PIN_RELAY2);
 
   t1.enable();
   sampleADCTask.enable();
@@ -133,70 +130,34 @@ void sampleADCCallback()
 
 void stateMachineCallback()
 {
-  switch (current_state)
-  {
-  case ST_INIT:
-    next_state = ST_IDLE;
-    break;
-
-  case ST_IDLE:
-    if (motorBtnSTM->isPressed())
-    {
-      motorBtnSTM->reset();
-      next_state = ST_MOTOR_ON;
-    }
-    break;
-
-  case ST_MOTOR_RUNNING:
-    if (motorBtnSTM->isPressed())
-    {
-      motorBtnSTM->reset();
-      next_state = ST_MOTOR_OFF;
-    }
-    break;
-
-  case ST_MOTOR_OFF:
-    motor_enabled(false);
-    motorLEDSTM->setLED(LED_BLINK_1HZ);
-    compressorLEDSTM->setLED(LED_ON);  
-    next_state = ST_IDLE;
-    break;
-
-  case ST_MOTOR_ON:
-    motor_enabled(true);
-    motorLEDSTM->setLED(LED_ON);
-    compressorLEDSTM->setLED(LED_BLINK_1HZ);  
-    next_state = ST_MOTOR_RUNNING;
-    break;
-  }
-
-  current_state = next_state;
+  motorSTM->update();
+  compressorSTM->update();
 }
 
+void sampleMotorButtonCallback()
+{
+  motorBtnSTM->update();
+  compressorBtnSTM->update();
+}
 
-  void sampleMotorButtonCallback()
-  {
-    motorBtnSTM->update();
-  }
+void motorBlinkCallback()
+{
+  motorLEDSTM->update();
+  compressorLEDSTM->update();
+}
 
-  void motorBlinkCallback()
-  {
-    motorLEDSTM->update();
-    compressorLEDSTM->update();
-  }
-
-  void t1Callback()
-  {
-    MeasAvg.publish();
-    float power = MeasAvg.rmsVal * SOFTICE_SUPPLY_VOLTAGE;
+void t1Callback()
+{
+  MeasAvg.publish();
+  float power = MeasAvg.rmsVal * SOFTICE_SUPPLY_VOLTAGE;
 #ifdef ENABLE_ENERGY_LOG
-    Serial.print(">Power:");
-    Serial.println(power);
+  Serial.print(">Power:");
+  Serial.println(power);
 #endif
-  }
+}
 
-  void loop()
-  {
-    // put your main code here, to run repeatedly:
-    runner.execute();
-  }
+void loop()
+{
+  // put your main code here, to run repeatedly:
+  runner.execute();
+}

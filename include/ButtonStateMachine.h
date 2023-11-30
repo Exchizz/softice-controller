@@ -1,3 +1,6 @@
+#ifndef BUTTON_STATE_MACHINE_H
+#define BUTTON_STATE_MACHINE_H
+
 #include "Arduino.h"
 
 #define ST_BUTTON_IDLE 1
@@ -21,3 +24,4 @@ public:
     bool isPressed();
     void reset();
 };
+#endif

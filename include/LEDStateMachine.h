@@ -1,3 +1,5 @@
+#ifndef LED_STATE_MACHINE_H
+#define LED_STATE_MACHINE_H
 #include "Arduino.h"
 
 #define LED_BLINK_10HZ 1
@@ -18,3 +20,5 @@ class LEDStateMachine
         LEDStateMachine(int led_pin);
         void setLED(int blink_delay);
 };
+
+#endif
