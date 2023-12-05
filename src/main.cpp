@@ -10,6 +10,8 @@
 // Debug flags
 #define ENABLE_SERIAL_DEBUG
 
+#define THRESHOLD_SOFTICE_DONE_WATT 500
+
 #define PIN_RELAY1 2
 #define PIN_RELAY2 3
 #define PIN_MOTOR_BUTTON 7
@@ -17,6 +19,7 @@
 #define PIN_COMPRESSOR_LED 11
 
 #define PIN_COMPRESSOR_BUTTON 6
+
 
 // #define ENABLE_ENERGY_LOG 1
 
@@ -180,6 +183,11 @@ void t1Callback()
   Serial.print(">Power:");
   Serial.println(power);
 #endif
+  if(power > THRESHOLD_SOFTICE_DONE_WATT){
+      compressorSTM->set_ready_flag();
+  } else {
+      compressorSTM->clear_ready_flag();
+  }
 }
 
 void loop()
