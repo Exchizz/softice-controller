@@ -4,6 +4,11 @@
 #include <ButtonStateMachine.h>
 #include <LEDStateMachine.h>
 #include <MotorStateMachine.h>
+#include <CompressorStateMachine.h>
+
+
+// Debug flags
+#define ENABLE_SERIAL_DEBUG
 
 #define PIN_RELAY1 2
 #define PIN_RELAY2 3
@@ -52,7 +57,7 @@ Task t1(100, TASK_FOREVER, &t1Callback);
 Task sampleADCTask(1, TASK_FOREVER, &sampleADCCallback);
 Task sampleMotorButton(100, TASK_FOREVER, &sampleMotorButtonCallback);
 Task stateMachineTask(100, TASK_FOREVER, &stateMachineCallback);
-Task motorBlinkTask(100, TASK_FOREVER, &motorBlinkCallback);
+Task motorBlinkTask(10, TASK_FOREVER, &motorBlinkCallback);
 
 Rms MeasAvg; // Create an instance of Average.
 
@@ -63,7 +68,7 @@ LEDStateMachine *motorLEDSTM;
 LEDStateMachine *compressorLEDSTM;
 
 MotorStateMachine *motorSTM;
-MotorStateMachine *compressorSTM;
+CompressorStateMachine *compressorSTM;
 
 void setup()
 {
@@ -108,11 +113,9 @@ void setup()
   motorSTM->setLEDStateMachine(motorLEDSTM);
   motorSTM->setButtonStateMachine(motorBtnSTM);
 
-  compressorSTM = new MotorStateMachine(PIN_RELAY2);
+  compressorSTM = new CompressorStateMachine(PIN_RELAY2);
   compressorSTM->setLEDStateMachine(compressorLEDSTM);
   compressorSTM->setButtonStateMachine(compressorBtnSTM);
-
-  //  motorSTM = new MotorStateMachine(PIN_RELAY2);
 
   t1.enable();
   sampleADCTask.enable();
@@ -150,6 +153,29 @@ void t1Callback()
 {
   MeasAvg.publish();
   float power = MeasAvg.rmsVal * SOFTICE_SUPPLY_VOLTAGE;
+#ifdef ENABLE_SERIAL_DEBUG
+  String incomingMSG;
+  if (Serial.available() > 0) {
+    // read the incoming byte:
+    incomingMSG = Serial.readStringUntil('\n');
+    Serial.print("Received message:-");
+    incomingMSG.replace("\n", "");
+    incomingMSG.replace("\r", "");
+    
+    Serial.print(incomingMSG);
+    Serial.println("-");
+
+    if(incomingMSG.equals("ready")){
+      Serial.println("Softice ready!");
+      compressorSTM->set_ready_flag();
+    }
+    if(incomingMSG.equals("notready")){
+      Serial.println("Softice not ready!");
+      compressorSTM->clear_ready_flag();
+    }
+  }
+
+#endif
 #ifdef ENABLE_ENERGY_LOG
   Serial.print(">Power:");
   Serial.println(power);

@@ -2,9 +2,9 @@
 #define LED_STATE_MACHINE_H
 #include "Arduino.h"
 
-#define LED_BLINK_10HZ 1
-#define LED_BLINK_1HZ 10
-#define LED_BLINK_5HZ 5
+#define LED_BLINK_10HZ 10
+#define LED_BLINK_1HZ 100
+#define LED_BLINK_5HZ 50
 #define LED_ON -2
 #define LED_BLINK_OFF -1
 

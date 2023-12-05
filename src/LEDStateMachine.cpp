@@ -24,8 +24,6 @@ void LEDStateMachine::update() {
       return;
       break;
     }
-    Serial.print("sleep blink counter:");
-    Serial.println(sleep_cnt);
     if (sleep_cnt++ >= motor_led_blink_delay)
     {
       digitalWrite(led_pin, !digitalRead(led_pin));

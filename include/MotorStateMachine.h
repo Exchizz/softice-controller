@@ -13,7 +13,7 @@
 
 class MotorStateMachine
 {
-private:
+protected:
     int motor_pin;
     int current_state = ST_MOTOR_IDLE;
     int next_state = ST_MOTOR_IDLE;
