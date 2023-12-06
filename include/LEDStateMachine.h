@@ -15,8 +15,11 @@ class LEDStateMachine
         int motor_led_blink_delay = LED_BLINK_1HZ;
         int sleep_cnt = 0;
         int led_pin;
+        bool needs_update = false;
+        bool current_state = false;
+        int last_motor_led_blink_delay = 0;
     public:
-        void update();
+        bool update(unsigned long blinkTick, bool follow_state);
         LEDStateMachine(int led_pin);
         void setLED(int blink_delay);
 };

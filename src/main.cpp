@@ -53,6 +53,7 @@ bool toggle = true;
 
 int current_state = ST_INIT;
 int next_state = current_state;
+bool leader_state = false;
 
 int motor_led_blink_delay = LED_BLINK_1HZ;
 
@@ -72,6 +73,7 @@ LEDStateMachine *compressorLEDSTM;
 
 MotorStateMachine *motorSTM;
 CompressorStateMachine *compressorSTM;
+unsigned long blinkTick = 0;
 
 void setup()
 {
@@ -148,8 +150,9 @@ void sampleMotorButtonCallback()
 
 void motorBlinkCallback()
 {
-  motorLEDSTM->update();
-  compressorLEDSTM->update();
+  blinkTick = ++blinkTick % 200;
+  leader_state = motorLEDSTM->update(blinkTick, leader_state);
+  leader_state = compressorLEDSTM->update(blinkTick, leader_state);
 }
 
 void t1Callback()
@@ -183,11 +186,13 @@ void t1Callback()
   Serial.print(">Power:");
   Serial.println(power);
 #endif
+#ifdef SIMULATE_POWER
   if(power > THRESHOLD_SOFTICE_DONE_WATT){
       compressorSTM->set_ready_flag();
   } else {
       compressorSTM->clear_ready_flag();
   }
+#endif
 }
 
 void loop()
