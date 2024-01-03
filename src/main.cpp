@@ -8,7 +8,7 @@
 
 
 // Debug flags
-#define ENABLE_SERIAL_DEBUG
+//#define ENABLE_SERIAL_DEBUG
 
 #define THRESHOLD_SOFTICE_DONE_WATT 500
 
@@ -17,11 +17,17 @@
 #define PIN_MOTOR_BUTTON 7
 #define PIN_MOTOR_LED 10
 #define PIN_COMPRESSOR_LED 11
-
 #define PIN_COMPRESSOR_BUTTON 6
 
+#define PIN_ADC_CURRENT A0
+#define PIN_ADC_VOLTAGE A1
 
-// #define ENABLE_ENERGY_LOG 1
+
+// Transformer for 230 volt measurement
+#define TRANS_RATIO 67 // 230/70 = ~3.3
+
+
+#define ENABLE_ENERGY_LOG 1
 
 Scheduler runner;
 
@@ -33,8 +39,11 @@ void stateMachineCallback();
 
 #define SUPPLY_VOLTAGE 5.0
 #define ADC_CENTER SUPPLY_VOLTAGE / 2.0
-#define MAX_CURRENT 5
+#define MAX_CURRENT 25 // Approx
+#define VOLTAGE_DIVIDER_VOLTAGE 0.4 // 10/(15+10)
+#define MAX_VOLTAGE 897// 5 = (x/70)*1.4*0.4-2.5, x = 312.5
 #define AVG_WINDOW 40 // number of samples
+
 
 #define SOFTICE_SUPPLY_VOLTAGE 230
 
@@ -63,7 +72,7 @@ Task sampleMotorButton(100, TASK_FOREVER, &sampleMotorButtonCallback);
 Task stateMachineTask(100, TASK_FOREVER, &stateMachineCallback);
 Task motorBlinkTask(10, TASK_FOREVER, &motorBlinkCallback);
 
-Rms MeasAvg; // Create an instance of Average.
+Power acPower; // Create an instance of Average.
 
 ButtonStateMachine *motorBtnSTM;
 ButtonStateMachine *compressorBtnSTM;
@@ -77,9 +86,10 @@ unsigned long blinkTick = 0;
 
 void setup()
 {
-  MeasAvg.begin(MAX_CURRENT, AVG_WINDOW, ADC_10BIT, BLR_ON, CNT_SCAN);
+//	acPower.begin(acVoltRange, acCurrRange, RMS_WINDOW, ADC_10BIT, BLR_ON, SGL_SCAN);
+  acPower.begin(MAX_VOLTAGE, MAX_CURRENT, AVG_WINDOW, ADC_10BIT, BLR_ON, SGL_SCAN);
 
-  MeasAvg.start(); // start measuring
+  acPower.start(); // start measuring
 
   pinMode(13, OUTPUT);
   pinMode(PIN_RELAY1, OUTPUT);
@@ -93,7 +103,7 @@ void setup()
   digitalWrite(PIN_RELAY1, HIGH);
   digitalWrite(PIN_RELAY2, HIGH);
 
-  Serial.begin(9600);
+  Serial.begin(115200);
   Serial.println("Scheduler TEST");
 
   runner.init();
@@ -132,8 +142,32 @@ void setup()
 
 void sampleADCCallback()
 {
-  int sample = analogRead(A0);
-  MeasAvg.update(sample);
+  int sampleCurrent = analogRead(PIN_ADC_CURRENT);
+  int sampleVoltage = analogRead(PIN_ADC_VOLTAGE);
+
+  // *2 due to voltage-divider
+  float sampleVoltageNormalized = (sampleVoltage * 5.0 / 1024) - 2.5;
+  float voltageSecVolt = sampleVoltageNormalized/VOLTAGE_DIVIDER_VOLTAGE;
+  float voltagePriVolt = voltageSecVolt * TRANS_RATIO;
+
+  // *2 due to voltage-divider
+  acPower.update(sampleVoltage, sampleCurrent);
+
+#ifdef ENABLE_ENERGY_LOG
+  float currentvoltage = sampleCurrent * 5.0 / 1024;
+  Serial.print(">ADC(0):");
+  Serial.print(currentvoltage);
+  Serial.println(",np");
+
+  Serial.print(">ADC(1):");
+  Serial.print(sampleVoltage);
+  Serial.println(",np");
+
+  Serial.print(">V:");
+  Serial.print(voltagePriVolt);
+  Serial.println(",np");
+
+#endif
 }
 
 void stateMachineCallback()
@@ -157,8 +191,35 @@ void motorBlinkCallback()
 
 void t1Callback()
 {
-  MeasAvg.publish();
-  float power = MeasAvg.rmsVal * SOFTICE_SUPPLY_VOLTAGE;
+  if(acPower.acqRdy){
+    acPower.publish();
+    acPower.start();
+  } else {
+    Serial.print(">Publishing:");
+	  Serial.print(0);
+    Serial.println(",np");
+  }
+
+  Serial.print(">RMSval1:");
+	Serial.print(acPower.rmsVal1);
+  Serial.println(",np");
+
+  Serial.print(">RMSval2:");
+	Serial.print(acPower.rmsVal2);
+  Serial.println(",np");
+
+  Serial.print(">AppPwr:");
+	Serial.print(acPower.apparentPwr);
+  Serial.println(",np");
+
+  Serial.print(">RealPwr:");
+	Serial.print(acPower.realPwr);
+  Serial.println(",np");
+
+  Serial.print(">PF:");
+	Serial.print(acPower.pf);
+  Serial.println(",np");
+//  float power = acPower.rmsVal * SOFTICE_SUPPLY_VOLTAGE;
 #ifdef ENABLE_SERIAL_DEBUG
   String incomingMSG;
   if (Serial.available() > 0) {
@@ -183,8 +244,8 @@ void t1Callback()
 
 #endif
 #ifdef ENABLE_ENERGY_LOG
-  Serial.print(">Power:");
-  Serial.println(power);
+//  Serial.print(">Power:");
+//  Serial.println(power);
 #endif
 #ifdef SIMULATE_POWER
   if(power > THRESHOLD_SOFTICE_DONE_WATT){
