@@ -1,3 +1,4 @@
+#define _TASK_MICRO_RES
 #include <Arduino.h>
 #include <TaskScheduler.h>
 #include <TrueRMS.h>
@@ -66,11 +67,11 @@ bool leader_state = false;
 
 int motor_led_blink_delay = LED_BLINK_1HZ;
 
-Task t1(100, TASK_FOREVER, &t1Callback);
-Task sampleADCTask(1, TASK_FOREVER, &sampleADCCallback);
-Task sampleMotorButton(100, TASK_FOREVER, &sampleMotorButtonCallback);
-Task stateMachineTask(100, TASK_FOREVER, &stateMachineCallback);
-Task motorBlinkTask(10, TASK_FOREVER, &motorBlinkCallback);
+Task t1(100000, TASK_FOREVER, &t1Callback);
+Task sampleADCTask(1000, TASK_FOREVER, &sampleADCCallback);
+Task sampleMotorButton(100000, TASK_FOREVER, &sampleMotorButtonCallback);
+Task stateMachineTask(100000, TASK_FOREVER, &stateMachineCallback);
+Task motorBlinkTask(10000, TASK_FOREVER, &motorBlinkCallback);
 
 Power acPower; // Create an instance of Average.
 
@@ -191,14 +192,6 @@ void motorBlinkCallback()
 
 void t1Callback()
 {
-  if(acPower.acqRdy){
-    acPower.publish();
-    acPower.start();
-  } else {
-    Serial.print(">Publishing:");
-	  Serial.print(0);
-    Serial.println(",np");
-  }
 
   Serial.print(">RMSval1:");
 	Serial.print(acPower.rmsVal1);
