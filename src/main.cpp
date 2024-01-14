@@ -11,6 +11,8 @@
 // Debug flags
 //#define ENABLE_SERIAL_DEBUG
 
+#define sq(x) ((x)*(x))
+
 #define THRESHOLD_SOFTICE_DONE_WATT 500
 
 #define PIN_RELAY1 2
@@ -19,6 +21,8 @@
 #define PIN_MOTOR_LED 10
 #define PIN_COMPRESSOR_LED 11
 #define PIN_COMPRESSOR_BUTTON 6
+
+#define ARDUINO_5V 5.191 // volt, measured with voltmeter
 
 #define PIN_ADC_CURRENT A0
 #define PIN_ADC_VOLTAGE A1
@@ -41,7 +45,7 @@ void stateMachineCallback();
 #define SUPPLY_VOLTAGE 5.0
 #define ADC_CENTER SUPPLY_VOLTAGE / 2.0
 #define MAX_CURRENT 25 // Approx
-#define VOLTAGE_DIVIDER_VOLTAGE 0.4 // 10/(15+10)
+#define VOLTAGE_DIVIDER_VOLTAGE 0.4 // <- measured // 10/(15+10)
 #define MAX_VOLTAGE 897// 5 = (x/70)*1.4*0.4-2.5, x = 312.5
 #define AVG_WINDOW 40 // number of samples
 
@@ -73,7 +77,7 @@ Task sampleMotorButton(100000, TASK_FOREVER, &sampleMotorButtonCallback);
 Task stateMachineTask(100000, TASK_FOREVER, &stateMachineCallback);
 Task motorBlinkTask(10000, TASK_FOREVER, &motorBlinkCallback);
 
-Power acPower; // Create an instance of Average.
+Power2 acPower; // Create an instance of Average.
 
 ButtonStateMachine *motorBtnSTM;
 ButtonStateMachine *compressorBtnSTM;
@@ -110,11 +114,11 @@ void setup()
   runner.init();
   Serial.println("Initialized scheduler");
 
-  runner.addTask(t1);
+  //runner.addTask(t1);
   runner.addTask(sampleADCTask);
-  runner.addTask(sampleMotorButton);
-  runner.addTask(stateMachineTask);
-  runner.addTask(motorBlinkTask);
+  //runner.addTask(sampleMotorButton);
+  //runner.addTask(stateMachineTask);
+  //runner.addTask(motorBlinkTask);
   Serial.println("added t1");
 
   delay(1000);
@@ -141,34 +145,108 @@ void setup()
   Serial.println("Enabled all tasks");
 }
 
+#define ST_PERIOD_INIT 0
+#define ST_PERIOD_WAIT 1
+#define ST_PERIOD_START 2
+#define ST_PERIOD_END 3
+#define ST_PERIOD_COLLECT 4
+
+#define VOLTAGE_OFFSET 2.590 // Volt, measured with voltmete
+
 void sampleADCCallback()
 {
   int sampleCurrent = analogRead(PIN_ADC_CURRENT);
   int sampleVoltage = analogRead(PIN_ADC_VOLTAGE);
+  int sampleTest = analogRead(A5);
+  static unsigned long period_ms_start = 0;
+  static float temp_sumSqInstVal1 = 0;
+  static unsigned long period_ms_stop = 0;
+  static unsigned long period_ms = 0;
+  static unsigned int sampleCounter = 0;
 
-  // *2 due to voltage-divider
-  float sampleVoltageNormalized = (sampleVoltage * 5.0 / 1024) - 2.5;
-  float voltageSecVolt = sampleVoltageNormalized/VOLTAGE_DIVIDER_VOLTAGE;
+  static float last_sampleVoltageUnbiased = 0.0;
+  static int state_acVoltage = ST_PERIOD_WAIT;
+  int event_cross_high_to_low = false;
+
+  float sampleVoltageNormalized = (sampleVoltage * (ARDUINO_5V/ 1023)) - VOLTAGE_OFFSET ;
+  float voltageSecVolt = sampleVoltageNormalized/VOLTAGE_DIVIDER_VOLTAGE ; //-2.57;
   float voltagePriVolt = voltageSecVolt * TRANS_RATIO;
 
-  // *2 due to voltage-divider
-  acPower.update(sampleVoltage, sampleCurrent);
+//  Serial.print(">AC:");
+//  Serial.println(voltagePriVolt);
 
-#ifdef ENABLE_ENERGY_LOG
-  float currentvoltage = sampleCurrent * 5.0 / 1024;
-  Serial.print(">ADC(0):");
-  Serial.print(currentvoltage);
-  Serial.println(",np");
+  if(last_sampleVoltageUnbiased > 0 && sampleVoltageNormalized < 0){
+    // Crossing X-axis from high to low
+    event_cross_high_to_low = true;
+    digitalWrite(PIN_COMPRESSOR_LED, !digitalRead(PIN_COMPRESSOR_LED));
+  }
 
-  Serial.print(">ADC(1):");
-  Serial.print(sampleVoltage);
-  Serial.println(",np");
 
-  Serial.print(">V:");
-  Serial.print(voltagePriVolt);
-  Serial.println(",np");
+  switch(state_acVoltage){
+    case ST_PERIOD_WAIT:
+      if(event_cross_high_to_low){
+        state_acVoltage = ST_PERIOD_COLLECT;
+        period_ms_start = micros();
+  			temp_sumSqInstVal1 = sq(voltageSecVolt);
+        sampleCounter = 1;
+      }
+    break;
 
-#endif
+    case ST_PERIOD_COLLECT:
+        //Serial.print(">SQ:");
+        //Serial.println(temp_sumSqInstVal1);
+        if(event_cross_high_to_low){
+          period_ms_stop = micros();
+          period_ms = (period_ms_stop - period_ms_start)/1000.0;
+
+          Serial.print(">Period:");
+          Serial.println(period_ms);
+
+          if(period_ms == 20){
+            //Serial.print(">PeriodFiltered:");
+            //Serial.println(period_ms);
+
+            // period is valid
+            Serial.print(">sampleCounter:");
+            Serial.println(sampleCounter);
+            float msVal1 = temp_sumSqInstVal1/sampleCounter;
+            float rmsVal1 = sqrt(msVal1);
+            Serial.print(">RMSVal1:");
+            Serial.println(rmsVal1*TRANS_RATIO);
+          }
+          state_acVoltage = ST_PERIOD_WAIT;
+        }
+        sampleCounter++;
+        temp_sumSqInstVal1 += sq(voltageSecVolt);
+ 
+    break;
+
+    case ST_PERIOD_START:
+    break;
+
+
+    case ST_PERIOD_END:
+    break;
+  }
+
+
+  last_sampleVoltageUnbiased = sampleVoltageNormalized;
+
+//  acPower.update(sampleVoltage, sampleCurrent);
+
+//  float currentvoltage = sampleCurrent * 5.0 / 1024;
+//  Serial.print(">ADC(0):");
+//  Serial.print(currentvoltage);
+//  Serial.println(",np");
+//
+//  Serial.print(">ADC(1):");
+//  Serial.print(sampleVoltage);
+//  Serial.println(",np");
+//
+//  Serial.print(">V:");
+//  Serial.print(voltagePriVolt);
+//  Serial.println(",np");
+//
 }
 
 void stateMachineCallback()
@@ -192,7 +270,6 @@ void motorBlinkCallback()
 
 void t1Callback()
 {
-
   Serial.print(">RMSval1:");
 	Serial.print(acPower.rmsVal1);
   Serial.println(",np");
